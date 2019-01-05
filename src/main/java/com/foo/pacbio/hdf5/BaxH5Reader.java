@@ -2,9 +2,11 @@ package com.foo.pacbio.hdf5;
 
 import java.nio.file.Path;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Queue;
+import java.util.concurrent.LinkedBlockingDeque;
+
+import com.foo.pacbio.fastq.FastqRawRecord;
 
 import ch.systemsx.cisd.hdf5.HDF5Factory;
 import ch.systemsx.cisd.hdf5.IHDF5SimpleReader;
@@ -88,7 +90,7 @@ public class BaxH5Reader implements Iterable<FastqRawRecord>, AutoCloseable {
 		private int shift = 0;
 		private int baseShift = 0;
 
-		private final Queue<FastqRawRecord> queue = new LinkedList<>();
+		private final Queue<FastqRawRecord> queue = new LinkedBlockingDeque<>();
 
 		ReadIterator() {
 			this.regions = new RegionIterator();
@@ -105,9 +107,9 @@ public class BaxH5Reader implements Iterable<FastqRawRecord>, AutoCloseable {
 				Region region = regions.next();
 
 				if (region.isSequencing()) {
-					for (IntPair entry : region.getBeginEnd()) {
-						int b = entry.first;
-						int e = entry.second;
+					for (RegionInterval entry : region.getBoundaries()) {
+						int b = entry.getBegin();
+						int e = entry.getEnd();
 						for (int i = b; i < e; ++i) {
 							qual[baseShift + i] += 33;
 						}

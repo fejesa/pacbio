@@ -3,16 +3,18 @@ package com.foo.pacbio.hdf5;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Represents a sequence region boundaries and scoring value. PacBio can
  * generate different kind of region data therefore we store the status of it
  * for filtering; i.e. for FASTQ conversion.
  */
-class Region {
+final class Region {
 
 	/** List of region boundaries. */
-	private final List<IntPair> beginEnd;
+	private final List<RegionInterval> boundaries;
 
 	private final byte holeStatus;
 	private final int regionScore;
@@ -24,7 +26,7 @@ class Region {
 		int hqStart = Integer.MAX_VALUE;
 		int hqEnd = -1;
 
-		List<IntPair> pairs = new ArrayList<>();
+		List<RegionInterval> intervals = new ArrayList<>();
 
 		int score = -1;
 		for (int shift = begin; shift < end; shift += 5) {
@@ -32,7 +34,7 @@ class Region {
 			int locEnd = data[shift + 3];
 
 			if (data[shift + 1] == 1) { // 'Insert data'
-				pairs.add(new IntPair(locStart, locEnd));
+				intervals.add(new RegionInterval(locStart, locEnd));
 
 			} else if (data[shift + 1] == 2) { // 'HQRegion'
 				hqStart = Math.min(locStart, hqStart);
@@ -41,22 +43,27 @@ class Region {
 			}
 		}
 		
-		this.beginEnd = new ArrayList<>();
-
-		for (final IntPair pair : pairs) {
-			int b = Integer.max(pair.first, hqStart);
-			int e = Integer.min(pair.second, hqEnd);
-
-			if (e > b) {
-				beginEnd.add(new IntPair(b, e));
-			}
-		}
-
+		boundaries = createBoundaries(intervals, hqStart, hqEnd);
 		regionScore = score;
 	}
 
-	public List<IntPair> getBeginEnd() {
-		return beginEnd;
+	private static List<RegionInterval> createBoundaries(List<RegionInterval> intervals, int hqStart, int hqEnd) {
+		return intervals
+				.stream()
+				.map(i -> from(i, hqStart, hqEnd))
+				.filter(Optional::isPresent)
+				.map(Optional::get)
+				.collect(Collectors.toList());
+	}
+
+	private static Optional<RegionInterval> from(RegionInterval interval, int hqStart, int hqEnd) {
+		int b = Integer.max(interval.getBegin(), hqStart);
+		int e = Integer.min(interval.getEnd(), hqEnd);
+		return e > b ? Optional.of(new RegionInterval(b, e)) : Optional.empty();
+	}
+	
+	public List<RegionInterval> getBoundaries() {
+		return boundaries;
 	}
 
 	/**
